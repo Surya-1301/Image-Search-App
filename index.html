@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Search App</title>
+  <link rel="stylesheet" href="style.css"> <!-- Linking CSS -->
+</head>
+<body>
+
+  <div class="container">
+    <form id="search-form">
+      <input type="text" id="search-input" placeholder="Search for images..." required />
+      <button type="submit">Search</button>
+    </form>
+
+    <div id="loading" style="display: none;">Loading...</div>
+
+    <div id="images-grid" class="grid"></div> <!-- Image Grid Area -->
+  </div>
+
+  <script src="script.js"></script> <!-- Linking JS -->
+</body>
+</html>

@@ -4,22 +4,8 @@ const cors = require('cors');
 const axios = require('axios');
 const app = express();
 
-// Enable CORS for specific origins
-app.use(cors({
-  origin: 'https://voluble-melomakarona-866e9c.netlify.app',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  credentials: true
-}));
-
-// Add headers middleware
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://voluble-melomakarona-866e9c.netlify.app');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  next();
-});
+// Enable CORS for all origins
+app.use(cors());
 
 // Basic middleware for logging
 app.use((req, res, next) => {

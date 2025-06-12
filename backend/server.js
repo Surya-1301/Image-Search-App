@@ -4,17 +4,13 @@ const cors = require('cors');
 const axios = require('axios');
 const app = express();
 
-// Enable CORS for specific origins
-app.use(cors({
-  origin: ['https://voluble-melomakarona-866e9c.netlify.app', 'http://localhost:3000'],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  credentials: true
-}));
+// Enable CORS for all origins during development
+app.use(cors());
 
 // Basic middleware for logging
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log('Headers:', req.headers);
   next();
 });
 
@@ -25,6 +21,7 @@ const PIXABAY_API_URL = 'https://pixabay.com/api/';
 // Route to handle image search
 app.get('/api/images', async (req, res) => {
   try {
+    console.log('Received request for images with query:', req.query);
     const query = req.query.query;
     if (!query) {
       return res.status(400).json({ error: 'Search query is required' });
@@ -39,6 +36,7 @@ app.get('/api/images', async (req, res) => {
       }
     });
 
+    console.log('Pixabay API response status:', response.status);
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching images:', error);

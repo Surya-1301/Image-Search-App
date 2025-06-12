@@ -34,18 +34,28 @@ function createImageCard(hit) {
 // Function to fetch images
 async function fetchImages(query, page = 1) {
   try {
-    const backendUrl = 'https://image-search-app-9gya.onrender.com'; // Replace with your actual Render URL
-    const response = await fetch(`${backendUrl}/api/images?query=${encodeURIComponent(query)}&page=${page}`, {
+    const backendUrl = 'https://image-search-app-9gya.onrender.com';
+    const url = `${backendUrl}/api/images?query=${encodeURIComponent(query)}&page=${page}`;
+    console.log('Fetching from URL:', url);
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
       },
     });
     
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+    
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
     }
+    
     const data = await response.json();
+    console.log('Received data:', data);
     return data;
   } catch (error) {
     console.error('Error fetching images:', error);
@@ -75,10 +85,13 @@ async function handleSearch(e) {
   loadMoreBtn.style.display = 'none';
 
   try {
+    console.log('Starting search for query:', query);
     const data = await fetchImages(query);
+    console.log('Search completed, received data:', data);
+    
     totalHits = data.totalHits;
     
-    if (data.hits.length === 0) {
+    if (!data.hits || data.hits.length === 0) {
       imagesGrid.innerHTML = "<p>No images found. Try another search.</p>";
       return;
     }
@@ -90,7 +103,8 @@ async function handleSearch(e) {
       loadMoreBtn.style.display = 'block';
     }
   } catch (error) {
-    imagesGrid.innerHTML = "<p>Something went wrong. Please try again.</p>";
+    console.error('Search error:', error);
+    imagesGrid.innerHTML = `<p>Error: ${error.message}. Please try again.</p>`;
   } finally {
     loading.style.display = 'none';
   }

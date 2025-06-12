@@ -34,7 +34,8 @@ function createImageCard(hit) {
 // Function to fetch images
 async function fetchImages(query, page = 1) {
   try {
-    const response = await fetch(`/api/images?query=${encodeURIComponent(query)}&page=${page}`, {
+    const backendUrl = 'https://image-search-app-9gya.onrender.com'; // Replace with your actual Render URL
+    const response = await fetch(`${backendUrl}/api/images?query=${encodeURIComponent(query)}&page=${page}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',

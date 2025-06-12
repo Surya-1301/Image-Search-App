@@ -6,6 +6,7 @@
     "node": "20.11.1"
   },
   "scripts": {
+    "prebuild": "npm install --legacy-peer-deps && npm install react-scripts --save",
     "start": "node backend/server.js",
     "build": "react-scripts build",
     "dev": "react-scripts start",

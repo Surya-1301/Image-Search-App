@@ -2,7 +2,7 @@ services:
   - type: web
     name: image-search-app
     env: node
-    buildCommand: chmod +x build.sh && ./build.sh
+    buildCommand: npm install && npm run build
     staticPublishPath: ./build
     envVars:
       - key: NODE_VERSION

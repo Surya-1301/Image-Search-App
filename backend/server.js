@@ -6,7 +6,7 @@ const app = express();
 
 // Enable CORS for specific origins
 app.use(cors({
-  origin: ['https://your-netlify-app.netlify.app', 'http://localhost:3000'],
+  origin: ['https://voluble-melomakarona-866e9c.netlify.app', 'http://localhost:3000'],
   methods: ['GET', 'POST'],
   credentials: true
 }));

@@ -3,71 +3,56 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const app = express();
+const port = process.env.PORT || 10000;
 
-// Enable CORS with specific origin
+// CORS configuration
 const corsOptions = {
   origin: process.env.CORS_ORIGIN || 'https://voluble-melomakarona-866e9c.netlify.app',
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
 
 app.use(cors(corsOptions));
 
-// Basic middleware for logging
+// Logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   console.log('Headers:', req.headers);
   next();
 });
 
-// Pixabay API configuration
-const PIXABAY_API_KEY = '29904377-5d788804b733434f876aed7ea';
-const PIXABAY_API_URL = 'https://pixabay.com/api/';
+// Test endpoint
+app.get('/test', (req, res) => {
+  res.json({ message: 'Backend is running!' });
+});
 
-// Route to handle image search
+// Image search endpoint
 app.get('/api/images', async (req, res) => {
   try {
-    console.log('Received request for images with query:', req.query);
-    const query = req.query.query;
-    if (!query) {
-      return res.status(400).json({ error: 'Search query is required' });
-    }
-
-    const response = await axios.get(PIXABAY_API_URL, {
+    const { query, page = 1 } = req.query;
+    console.log('Search query:', query, 'Page:', page);
+    
+    const response = await axios.get(`https://api.unsplash.com/search/photos`, {
+      headers: {
+        'Authorization': `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`
+      },
       params: {
-        key: PIXABAY_API_KEY,
-        q: query,
-        image_type: 'photo',
-        per_page: 20
+        query,
+        page,
+        per_page: 10
       }
     });
-
-    console.log('Pixabay API response status:', response.status);
+    
+    console.log('Unsplash API response:', response.data);
     res.json(response.data);
   } catch (error) {
     console.error('Error fetching images:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch images',
-      details: error.message 
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Basic route for testing
-app.get('/test', (req, res) => {
-  res.json({ message: 'Server is working!' });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Server error:', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
-// Define port for server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
   console.log('CORS origin:', corsOptions.origin);
 });

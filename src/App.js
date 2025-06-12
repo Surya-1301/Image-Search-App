@@ -11,10 +11,9 @@ function App() {
   // Function to handle the search when the button is clicked
   const handleSearch = async () => {
     try {
-      // Send GET request to backend with the search query
-      const response = await axios.get(`http://localhost:5000/images?query=${query}`);
-      // Set the images from the response
-      setImages(response.data.images);
+      const backendUrl = 'https://image-search-app-9gya.onrender.com';
+      const response = await axios.get(`${backendUrl}/api/images?query=${query}`);
+      setImages(response.data.hits || []);
     } catch (error) {
       console.error('Error fetching images:', error); // Log any error if fetching fails
     }
@@ -41,7 +40,8 @@ function App() {
           // If images are found, display them in a grid
           images.map((image, index) => (
             <div key={index} className="image-card">
-              <img src={image} alt={`result-${index}`} />
+              <img src={image.webformatURL} alt={image.tags} />
+              <p>{image.tags}</p>
             </div>
           ))
         ) : (

@@ -7,7 +7,7 @@ const port = process.env.PORT || 10000;
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'https://voluble-melomakarona-866e9c.netlify.app',
+  origin: process.env.CORS_ORIGIN || 'https://image-search-6h7egk594-surya-1301s-projects.vercel.app',
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true

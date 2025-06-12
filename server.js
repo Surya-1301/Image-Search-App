@@ -61,7 +61,7 @@ app.use((err, req, res, next) => {
 // Use port 3000 instead of 5000
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on https://voluble-melomakarona-866e9c.netlify.app`);
   console.log('Current directory:', __dirname);
   console.log('Static files being served from:', path.join(__dirname));
 }); 

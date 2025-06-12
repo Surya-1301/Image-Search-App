@@ -11,31 +11,21 @@ function App() {
   const [loading, setLoading] = useState(false);
 
   // Function to handle the search when the button is clicked
-  const handleSearch = async () => {
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+
     try {
       setLoading(true);
       setError(null);
-      console.log('Starting search for query:', query);
       
-      const backendUrl = 'https://image-search-app-9gya.onrender.com';
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://backend-id9id1e31-surya-1301s-projects.vercel.app';
       const url = `${backendUrl}/api/images?query=${encodeURIComponent(query)}`;
-      console.log('Making request to:', url);
       
-      const response = await axios.get(url, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      console.log('Received response:', response.data);
+      const response = await axios.get(url);
       setImages(response.data.hits || []);
     } catch (error) {
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response,
-        request: error.request
-      });
+      console.error('Error details:', error);
       setError(error.message);
       setImages([]);
     } finally {
@@ -44,45 +34,105 @@ function App() {
   };
 
   return (
-    <div className="App">
-      <h1>Image Search</h1>
+    <div className="app-container">
+      <header className="app-header">
+        <h1>Image Search</h1>
+        <p className="subtitle">Discover beautiful images from around the world</p>
+        
+        <form onSubmit={handleSearch} className="search-form">
+          <div className="search-container">
+            <input
+              type="text"
+              placeholder="Search for images..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="search-input"
+            />
+            <button 
+              type="submit" 
+              className="search-button"
+              disabled={loading}
+            >
+              {loading ? (
+                <span className="loading-spinner"></span>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              )}
+            </button>
+          </div>
+        </form>
+      </header>
 
-      {/* Search input */}
-      <input
-        type="text"
-        placeholder="Search images"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)} // Update query state on input change
-      />
-
-      {/* Search button */}
-      <button onClick={handleSearch} disabled={loading}>
-        {loading ? 'Searching...' : 'Search'}
-      </button> {/* Trigger image search on button click */}
-
-      {error && (
-        <div className="error-message">
-          Error: {error}
-        </div>
-      )}
-
-      {/* Image display grid */}
-      <div className="grid-container">
-        {loading ? (
-          <p>Loading images...</p>
-        ) : images.length > 0 ? (
-          // If images are found, display them in a grid
-          images.map((image, index) => (
-            <div key={index} className="image-card">
-              <img src={image.webformatURL} alt={image.tags} />
-              <p>{image.tags}</p>
-            </div>
-          ))
-        ) : (
-          // If no images found, display a message
-          <p>No images found. Please try a different search.</p>
+      <main className="main-content">
+        {error && (
+          <div className="error-message">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            {error}
+          </div>
         )}
-      </div>
+
+        {loading ? (
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <p>Searching for images...</p>
+          </div>
+        ) : images.length > 0 ? (
+          <div className="image-grid">
+            {images.map((image, index) => (
+              <div key={index} className="image-card">
+                <div className="image-container">
+                  <img 
+                    src={image.webformatURL} 
+                    alt={image.tags} 
+                    loading="lazy"
+                  />
+                  <div className="image-overlay">
+                    <div className="image-stats">
+                      <span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                        {image.likes}
+                      </span>
+                      <span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                          <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        {image.views}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="image-info">
+                  <p className="image-tags">{image.tags}</p>
+                  <p className="image-user">by {image.user}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !loading && (
+          <div className="no-results">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <p>No images found. Try a different search term.</p>
+          </div>
+        )}
+      </main>
+
+      <footer className="app-footer">
+        <p>Powered by Pixabay API</p>
+      </footer>
     </div>
   );
 }

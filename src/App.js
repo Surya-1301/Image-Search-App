@@ -36,34 +36,54 @@ function App() {
   return (
     <div className="app-container">
       <header className="app-header">
-        <h1>Image Search</h1>
-        <p className="subtitle">Discover beautiful images from around the world</p>
-        
-        <form onSubmit={handleSearch} className="search-form">
-          <div className="search-container">
-            <input
-              type="text"
-              placeholder="Search for images..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="search-input"
-            />
-            <button 
-              type="submit" 
-              className="search-button"
-              disabled={loading}
-            >
-              {loading ? (
-                <span className="loading-spinner"></span>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="header-content">
+          <div className="logo-container">
+            <h1>Image Search</h1>
+          </div>
+          <form onSubmit={handleSearch} className="search-form">
+            <div className="search-container">
+              <div className="search-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
+              </div>
+              <input
+                type="text"
+                placeholder="Search for images..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="search-input"
+              />
+              {query && (
+                <button 
+                  type="button" 
+                  className="clear-button"
+                  onClick={() => setQuery('')}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
               )}
-            </button>
-          </div>
-        </form>
+              <button 
+                type="submit" 
+                className="search-button"
+                disabled={loading}
+              >
+                {loading ? (
+                  <span className="loading-spinner"></span>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
       </header>
 
       <main className="main-content">

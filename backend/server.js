@@ -4,8 +4,15 @@ const cors = require('cors');
 const axios = require('axios');
 const app = express();
 
-// Enable CORS for all origins
-app.use(cors());
+// Enable CORS with specific origin
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || 'https://voluble-melomakarona-866e9c.netlify.app',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 
 // Basic middleware for logging
 app.use((req, res, next) => {
@@ -62,4 +69,5 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log('CORS origin:', corsOptions.origin);
 });

@@ -2,14 +2,20 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const path = require('path');
 const app = express();
 
-// Enable CORS for all origins during development
-app.use(cors());
+// Enable CORS for specific origins
+app.use(cors({
+  origin: ['https://your-netlify-app.netlify.app', 'http://localhost:3000'],
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
 
-// Serve static files from the root directory
-app.use(express.static(path.join(__dirname, '..')));
+// Basic middleware for logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
 
 // Pixabay API configuration
 const PIXABAY_API_KEY = '29904377-5d788804b733434f876aed7ea';
@@ -28,7 +34,7 @@ app.get('/api/images', async (req, res) => {
         key: PIXABAY_API_KEY,
         q: query,
         image_type: 'photo',
-        per_page: 20 // Limit results per page
+        per_page: 20
       }
     });
 
@@ -42,13 +48,19 @@ app.get('/api/images', async (req, res) => {
   }
 });
 
-// Serve index.html for the root path
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'index.html'));
+// Basic route for testing
+app.get('/test', (req, res) => {
+  res.json({ message: 'Server is working!' });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // Define port for server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });

@@ -2,10 +2,7 @@ services:
   - type: web
     name: image-search-app
     env: node
-    buildCommand: |
-      npm install --legacy-peer-deps
-      npm install react-scripts --save
-      npm run build
+    buildCommand: chmod +x build.sh && ./build.sh
     staticPublishPath: ./build
     envVars:
       - key: NODE_VERSION

@@ -39,8 +39,6 @@ http://localhost:3000
 ```
 
 ## Project Structure
-
-```
 image-search-app/
 ├── server.js          # Express server and API endpoints
 ├── index.html         # Main HTML file
@@ -52,31 +50,34 @@ image-search-app/
 
 ## API Endpoints
 
-- `GET /api/images?query=<search_term>` - Search for images
-  - Query parameters:
-    - `query`: Search term (required)
-    - `page`: Page number for pagination (optional)
-
-## Technologies Used
-
-- Frontend:
+## Prerequisites
+Node.js (v16+ recommended)
+npm (Node Package Manager)
   - HTML5
+## Local development
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/image-search-app.git
+cd image-search-app
+```
+2. Install dependencies and run Netlify Dev (serves the frontend and Netlify Functions locally):
+```bash
+npm install
+npm run netlify:dev
+```
+The app will be available at http://localhost:8888 when using Netlify Dev.
   - CSS3
   - JavaScript (ES6+)
-- Backend:
-  - Node.js
-  - Express.js
-- API:
-  - Pixabay API
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
+## Project Structure
+This project is a React app (Create React App) with Netlify Functions providing the backend API.
+```
+image-search-app/
+├── netlify/functions/  # Serverless API endpoints (auth, images, dashboard)
+├── src/                # React source
+├── public/             # Static public assets
+├── build/              # Production build output (generated)
+├── package.json        # Project dependencies and scripts
+└── README.md           # Project documentation
+```
+Backend is implemented as Netlify Functions (serverless). For production you'll want a persistent datastore (Supabase, S3, FaunaDB, etc.) because Netlify Function filesystem is ephemeral.
 5. Open a Pull Request

@@ -1,14 +1,292 @@
 // src/App.js
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { ReactComponent as Logo } from './logo.svg';
 import './App.css'; // Optional: Import the CSS file for styling
 
 function App() {
   const [query, setQuery] = useState(''); // State to hold the search query
-  const [images, setImages] = useState([]); // State to hold images fetched from the backend
+  const [images, setImages] = useState([]); // State to hold images fetched from the API
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [provider, setProvider] = useState('both');
+  const [loadedImages, setLoadedImages] = useState(new Set());
+  const [savingIds, setSavingIds] = useState(new Set());
+  const [savedIds, setSavedIds] = useState(new Set());
+  const [auth, setAuth] = useState({ token: null, username: null });
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState('login'); // or signup
+  const [authForm, setAuthForm] = useState({ username: '', password: '' });
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [pendingSave, setPendingSave] = useState(null);
+  const [toast, setToast] = useState(null);
+  const googleButtonRef = useRef(null);
+
+  // Initialize Google Identity Services button when auth modal opens
+  useEffect(() => {
+    if (!showAuth) return;
+    // Ensure the global google object exists (script is loaded in index.html)
+    if (window.google && googleButtonRef.current) {
+      try {
+        /* global google */
+        const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || window.__GOOGLE_CLIENT_ID || '';
+        if (!clientId) {
+          console.warn('Google client id is not configured (REACT_APP_GOOGLE_CLIENT_ID)');
+        } else {
+          google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (resp) => {
+              if (resp && resp.credential) handleGoogleCredential(resp.credential);
+            }
+          });
+
+          // Render a compact button
+          google.accounts.id.renderButton(googleButtonRef.current, {
+            theme: 'outline',
+            size: 'large',
+            width: '240'
+          });
+        }
+
+        // Render a compact button
+        google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'outline',
+          size: 'large',
+          width: '240'
+        });
+      } catch (e) {
+        console.warn('Google Identity Services init failed', e);
+      }
+    }
+  }, [showAuth]);
+
+  // update the browser tab title based on the query and provider
+  useEffect(() => {
+    const base = 'Photu Search | Surya';
+    const parts = [];
+    if (query && query.trim()) parts.push(query.trim());
+    if (provider && provider !== 'both') parts.push(provider);
+    document.title = parts.length ? `${base} — ${parts.join(' · ')}` : base;
+    return () => { /* no cleanup needed */ };
+  }, [query, provider]);
+
+  // ref for the search input so we can focus it when returning home
+  const inputRef = useRef(null);
+
+  const handleTitleClick = (e) => {
+    // if user holds Ctrl (or Cmd on mac) do a full page reload
+    if (e.ctrlKey || e.metaKey) {
+      window.location.reload();
+      return;
+    }
+
+    // otherwise reset to home: clear query and images and focus the input
+    setQuery('');
+    setImages([]);
+    setError(null);
+    setProvider('both');
+    setLoadedImages(new Set());
+    // scroll to top and focus the search input
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (inputRef.current) inputRef.current.focus();
+  };
+
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleTitleClick(e);
+    }
+  };
+
+  const handleImageLoad = (i) => {
+    setLoadedImages(prev => {
+      const s = new Set(prev);
+      s.add(i);
+      return s;
+    });
+  };
+
+  // load saved ids from localStorage on mount
+  useEffect(() => {
+    try {
+      const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
+      const s = new Set(favs.map(f => f.url));
+      setSavedIds(s);
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  // load auth token
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem('token');
+      const username = localStorage.getItem('username');
+      const email = localStorage.getItem('email');
+      if (token && username) setAuth({ token, username, email });
+    } catch (e) {}
+  }, []);
+
+  // If we have a token, validate it with the backend and refresh user info
+  useEffect(() => {
+    let mounted = true;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    (async () => {
+      try {
+        const resp = await axios.get(`${apiBase}/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!mounted) return;
+        const user = resp.data && resp.data.user;
+        if (user) {
+            setAuth(prev => ({ token, username: user.username || prev.username, email: user.email || prev.email }));
+            localStorage.setItem('username', user.username || '');
+            if (user.email) localStorage.setItem('email', user.email);
+        }
+      } catch (err) {
+        // token invalid or network error: clear stored token to force re-auth
+        console.warn('Token validation failed:', err && err.response ? err.response.data : err.message || err);
+        localStorage.removeItem('token');
+        localStorage.removeItem('username');
+        if (mounted) setAuth({ token: null, username: null });
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, []);
+
+  // API base: when deployed to Netlify Functions this should be '/' (relative)
+  const apiBase = process.env.REACT_APP_BACKEND_URL || '/';
+
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const url = `${apiBase}/auth/${authMode}`;
+      const resp = await axios.post(url, { username: authForm.username, password: authForm.password });
+      const { token, username } = resp.data;
+  setAuth({ token, username });
+  localStorage.setItem('token', token);
+  localStorage.setItem('username', username);
+      setShowAuth(false);
+      // if there was a pending save action, resume it now
+      if (pendingSave) {
+        // show toast, then resume save
+        setToast('Saving image after sign-in...');
+        setTimeout(() => {
+          try { handleSave(pendingSave, null); } catch (err) { console.warn('resumed save failed', err); }
+          setPendingSave(null);
+        }, 200);
+        setTimeout(() => setToast(null), 2000);
+      }
+    } catch (err) {
+      alert((err.response && err.response.data && err.response.data.error) || err.message);
+    }
+  };
+
+  // Handle Google credential (ID token) returned by Google Identity Services
+  const handleGoogleCredential = async (credential) => {
+    try {
+      // send id_token to backend for verification and account creation/login
+      const url = `${apiBase}/auth/google`;
+      const resp = await axios.post(url, { id_token: credential });
+  const { token, username, email } = resp.data;
+  setAuth({ token, username, email });
+  localStorage.setItem('token', token);
+  localStorage.setItem('username', username);
+  if (email) localStorage.setItem('email', email);
+      setShowAuth(false);
+      // resume pending save if any
+      if (pendingSave) {
+        setToast('Saving image after sign-in...');
+        setTimeout(() => {
+          try { handleSave(pendingSave, null); } catch (err) { console.warn('resumed save failed', err); }
+          setPendingSave(null);
+        }, 200);
+        setTimeout(() => setToast(null), 2000);
+      }
+    } catch (err) {
+      console.error('Google sign-in failed', err);
+      alert((err.response && err.response.data && err.response.data.error) || err.message);
+    }
+  };
+
+  const handleLogout = () => {
+    setAuth({ token: null, username: null });
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+  };
+
+  const openDashboard = () => setShowDashboard(true);
+
+  const fetchDashboard = async () => {
+    try {
+      const token = auth.token || localStorage.getItem('token');
+      const resp = await axios.get(`${apiBase}/dashboard`, { headers: { Authorization: `Bearer ${token}` } });
+      setDashboardData(resp.data || null);
+    } catch (err) {
+      alert((err.response && err.response.data && err.response.data.error) || err.message);
+    }
+  };
+
+  const handleSave = async (image, e) => {
+    e && e.stopPropagation();
+    // require authentication to save/download images
+    const token = auth.token || localStorage.getItem('token');
+    if (!token) {
+      // store pending image and open auth modal
+      setPendingSave(image);
+  const pref = localStorage.getItem('preferredAuthMode') || 'signup';
+  setAuthMode(pref);
+  setShowAuth(true);
+      return;
+    }
+    const key = image.webformatURL || image.largeImageURL || image.url || image.id || image.tags;
+    if (!key) return;
+    // already saving
+    setSavingIds(prev => {
+      const s = new Set(prev);
+      if (s.has(key)) return prev;
+      s.add(key);
+      return s;
+    });
+
+    try {
+      // fetch image as blob to ensure download works across origins
+      const res = await fetch(image.webformatURL || image.largeImageURL || image.url);
+      if (!res.ok) throw new Error('Failed to fetch image');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeName = (image.user || 'image').replace(/[^a-z0-9_\-]/gi, '_').toLowerCase();
+      a.download = `${safeName}_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      // persist minimal favorite info
+      const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
+      favs.push({ url: image.webformatURL || image.largeImageURL || image.url, tags: image.tags, user: image.user, provider: image.provider });
+      localStorage.setItem('favorites', JSON.stringify(favs));
+
+      setSavedIds(prev => {
+        const s = new Set(prev);
+        s.add(key);
+        return s;
+      });
+    } catch (err) {
+      console.error('Save/download failed', err);
+    } finally {
+      setSavingIds(prev => {
+        const s = new Set(prev);
+        s.delete(key);
+        return s;
+      });
+    }
+  };
 
   // Function to handle the search when the button is clicked
   const handleSearch = async (e) => {
@@ -19,10 +297,11 @@ function App() {
       setLoading(true);
       setError(null);
       
-      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://backend-id9id1e31-surya-1301s-projects.vercel.app';
-      const url = `${backendUrl}/api/images?query=${encodeURIComponent(query)}`;
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || '/';
+  // always request both providers from the API
+  const url = `${backendUrl}api/images?query=${encodeURIComponent(query)}&provider=${encodeURIComponent(provider)}`;
       
-      const response = await axios.get(url);
+  const response = await axios.get(url);
       setImages(response.data.hits || []);
     } catch (error) {
       console.error('Error details:', error);
@@ -33,12 +312,33 @@ function App() {
     }
   };
 
+  // small helper to decide owner access
+const ownerEmail = process.env.REACT_APP_OWNER_EMAIL || '';
+const isOwner = !!(
+  (auth && auth.email && auth.email === ownerEmail) ||
+  (auth && auth.username && auth.username === ownerEmail) ||
+  (localStorage.getItem('email') && localStorage.getItem('email') === ownerEmail)
+);
+
   return (
     <div className="app-container">
       <header className="app-header">
         <div className="header-content">
           <div className="logo-container">
-            <h1>Image Search</h1>
+            <div
+              className="title-card"
+              role="button"
+              tabIndex={0}
+              onClick={handleTitleClick}
+              onKeyDown={handleTitleKeyDown}
+              aria-label="Home - clear search and focus input (Ctrl/Cmd + click to reload)"
+            >
+              <div className="title-row">
+                <h1 className="app-title">Photu Search</h1>
+                <Logo className="app-logo app-logo-inline" aria-hidden="true" />
+              </div>
+              <p className="title-sub">Search photos from Unsplash & Pixabay</p>
+            </div>
           </div>
           <form onSubmit={handleSearch} className="search-form">
             <div className="search-container">
@@ -51,10 +351,12 @@ function App() {
               <input
                 type="text"
                 placeholder="Search for images..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                  ref={inputRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
                 className="search-input"
               />
+            
               {query && (
                 <button 
                   type="button" 
@@ -83,6 +385,25 @@ function App() {
               </button>
             </div>
           </form>
+          <div className="auth-controls">
+            {auth.token ? (
+              <div className="auth-logged">
+                <span className="auth-user">{auth.username}</span>
+                <button className="auth-logout" onClick={handleLogout}>Logout</button>
+              </div>
+            ) : (
+              <div className="auth-header-buttons">
+                <button className="auth-open" onClick={() => { localStorage.setItem('preferredAuthMode','login'); setShowAuth(true); setAuthMode('login'); }}>Login</button>
+                <button className="auth-open" onClick={() => { localStorage.setItem('preferredAuthMode','signup'); setShowAuth(true); setAuthMode('signup'); }}>Sign up</button>
+              </div>
+            )}
+            <div style={{ marginLeft: '8px' }}>
+              {/* Show Dashboard button only to owner (set via REACT_APP_OWNER_EMAIL) */}
+              {auth.username && (auth.username === (process.env.REACT_APP_OWNER_EMAIL || '') ) && (
+                <button className="auth-open" onClick={openDashboard}>Dashboard</button>
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -106,14 +427,34 @@ function App() {
         ) : images.length > 0 ? (
           <div className="image-grid">
             {images.map((image, index) => (
-              <div key={index} className="image-card">
+              <div
+                key={index}
+                className={`image-card ${loadedImages.has(index) ? 'loaded' : ''}`}
+                style={{ ['--delay']: `${(index % 12) * 60}ms` }}
+              >
                 <div className="image-container">
-                  <img 
-                    src={image.webformatURL} 
-                    alt={image.tags} 
+                  <img
+                    src={image.webformatURL}
+                    alt={image.tags}
                     loading="lazy"
+                    onLoad={() => handleImageLoad(index)}
                   />
+
+                  {/* Floating provider badge on image */}
+                  {image.provider && (
+                    <div className="provider-badge overlay-badge">{image.provider}</div>
+                  )}
+
+                  {/* Overlay actions (appear on hover) */}
                   <div className="image-overlay">
+                    <div className="overlay-actions">
+                      <button
+                        className={`save-button ${savingIds.has(image.webformatURL || image.id) ? 'saving' : ''} ${savedIds.has(image.webformatURL || image.id) ? 'saved' : ''}`}
+                        onClick={(e) => handleSave(image, e)}
+                      >
+                        {savingIds.has(image.webformatURL || image.id) ? 'Saving...' : savedIds.has(image.webformatURL || image.id) ? 'Saved' : 'Save'}
+                      </button>
+                    </div>
                     <div className="image-stats">
                       <span>
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -145,14 +486,130 @@ function App() {
               <circle cx="8.5" cy="8.5" r="1.5"></circle>
               <polyline points="21 15 16 10 5 21"></polyline>
             </svg>
-            <p>No images found. Try a different search term.</p>
+            <p>Browse our popular categories below</p>
           </div>
         )}
       </main>
 
+      {showAuth && (
+        <div className="auth-modal" role="dialog" aria-modal="true">
+          <div className="auth-box">
+            <div className="auth-tabs">
+              <button className={authMode === 'login' ? 'active' : ''} onClick={() => { localStorage.setItem('preferredAuthMode','login'); setAuthMode('login'); }}>Login</button>
+              <button className={authMode === 'signup' ? 'active' : ''} onClick={() => { localStorage.setItem('preferredAuthMode','signup'); setAuthMode('signup'); }}>Sign up</button>
+            </div>
+            <form onSubmit={handleAuthSubmit} className="auth-form">
+              <input placeholder="Username" value={authForm.username} onChange={(e) => setAuthForm({...authForm, username: e.target.value})} required />
+              <input placeholder="Password" type="password" value={authForm.password} onChange={(e) => setAuthForm({...authForm, password: e.target.value})} required />
+              <div className="auth-actions">
+                <button type="submit">{authMode === 'login' ? 'Login' : 'Create account'}</button>
+                <button type="button" onClick={() => setShowAuth(false)}>Cancel</button>
+              </div>
+            </form>
+            <div style={{ marginTop: 12 }}>
+              <div ref={googleButtonRef} id="google-signin-button"></div>
+              <div style={{ marginTop: 8 }}>
+                <button onClick={() => alert('Alternatively, use the Google button above to sign in')}>Sign in with Google</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDashboard && (
+        <div className="auth-modal" role="dialog" aria-modal="true">
+          <div className="auth-box" style={{ maxWidth: 900 }}>
+            <h3>Owner Dashboard</h3>
+            <p>Site statistics & user list</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button onClick={fetchDashboard}>Refresh</button>
+              <button onClick={() => setShowDashboard(false)}>Close</button>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              {dashboardData ? (
+                <div>
+                  <p style={{ marginBottom: 8 }}>Users: {dashboardData.usersCount}</p>
+
+                  {Array.isArray(dashboardData.users) && dashboardData.users.length > 0 ? (
+                    <div style={{ overflowX: 'auto', maxHeight: '60vh' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>#</th>
+                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>Avatar</th>
+                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>Username</th>
+                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>Email</th>
+                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>Provider</th>
+                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>Created At</th>
+                            <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>Token</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dashboardData.users.map((u, idx) => (
+                            <tr key={u.username || u.email || idx} style={{ borderBottom: '1px solid #f1f1f1' }}>
+                              <td style={{ padding: '8px' }}>{idx + 1}</td>
+                              <td style={{ padding: '8px' }}>
+                                {u.picture ? (
+                                  <img src={u.picture} alt="avatar" style={{ width: 40, height: 40, borderRadius: 4, objectFit: 'cover' }} />
+                                ) : (
+                                  <div style={{ width: 40, height: 40, background: '#eee', display: 'inline-block', borderRadius: 4 }} />
+                                )}
+                              </td>
+                              <td style={{ padding: '8px' }}>{u.username || ''}</td>
+                              <td style={{ padding: '8px' }}>{u.email || ''}</td>
+                              <td style={{ padding: '8px' }}>{u.provider || ''}</td>
+                              <td style={{ padding: '8px' }}>{u.createdAt ? new Date(u.createdAt).toLocaleString() : ''}</td>
+                              <td style={{ padding: '8px' }}>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                  <code style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220, display: 'inline-block' }}>{u.token || ''}</code>
+                                  {u.token && (
+                                    <button
+                                      onClick={(e) => {
+                                        try {
+                                          navigator.clipboard.writeText(u.token);
+                                          // small feedback: replace temporarily
+                                          const btn = e.currentTarget;
+                                          const prev = btn.innerText;
+                                          btn.innerText = 'Copied';
+                                          setTimeout(() => { if (btn) btn.innerText = prev; }, 1200);
+                                        } catch (err) {
+                                          // fallback: prompt
+                                          window.prompt('Token (copy):', u.token);
+                                        }
+                                      }}
+                                    >Copy</button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p>No users available.</p>
+                  )}
+                </div>
+              ) : (
+                <p>No data loaded.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <footer className="app-footer">
-        <p>Powered by Pixabay API</p>
+        <p>
+          Powered by{' '}
+          <a href="https://github.com/Surya-1301" target="_blank" rel="noreferrer">Surya Pratap Singh</a>
+          {' '}— Photu Search • © {new Date().getFullYear()}
+        </p>
       </footer>
+      {/* toast */}
+      {toast && (
+        <div className="app-toast">{toast}</div>
+      )}
     </div>
   );
 }

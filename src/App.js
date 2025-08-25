@@ -11,15 +11,15 @@ function App() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [provider, setProvider] = useState('both');
-  // Unsplash controls
-  const [unsplashPerPage, setUnsplashPerPage] = useState(10);
-  const [unsplashOrientation, setUnsplashOrientation] = useState('');
-  const [unsplashColor, setUnsplashColor] = useState('');
-  // Pixabay controls
-  const [pixabayPerPage, setPixabayPerPage] = useState(20);
-  const [pixabayImageType, setPixabayImageType] = useState('photo');
-  const [pixabayOrder, setPixabayOrder] = useState('popular');
-  const [pixabayCategory, setPixabayCategory] = useState('');
+  // Unsplash controls (only value used; setters intentionally omitted to avoid unused-vars)
+  const [unsplashPerPage] = useState(10);
+  const [unsplashOrientation] = useState('');
+  const [unsplashColor] = useState('');
+  // Pixabay controls (only value used; setters intentionally omitted to avoid unused-vars)
+  const [pixabayPerPage] = useState(20);
+  const [pixabayImageType] = useState('photo');
+  const [pixabayOrder] = useState('popular');
+  const [pixabayCategory] = useState('');
   const [loadedImages, setLoadedImages] = useState(new Set());
   const [savingIds, setSavingIds] = useState(new Set());
   const [savedIds, setSavedIds] = useState(new Set());
@@ -40,6 +40,7 @@ function App() {
   const [lightboxImage, setLightboxImage] = useState(null);
 
   // Initialize Google Identity Services button when auth modal opens
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!showAuth) return;
     // Ensure the global google object exists (script is loaded in index.html)
@@ -170,7 +171,7 @@ function App() {
     })();
 
     return () => { mounted = false; };
-  }, []);
+  }, [apiBase]);
 
   // API base: when deployed to Netlify Functions this should be '/' (relative)
   const apiBase = process.env.REACT_APP_BACKEND_URL || '/';
@@ -410,11 +411,6 @@ function App() {
 
   // small helper to decide owner access
 const ownerEmail = process.env.REACT_APP_OWNER_EMAIL || '';
-const isOwner = !!(
-  (auth && auth.email && auth.email === ownerEmail) ||
-  (auth && auth.username && auth.username === ownerEmail) ||
-  (localStorage.getItem('email') && localStorage.getItem('email') === ownerEmail)
-);
 
   // per-page fixed to 30 as requested
   const perPage = 30;
@@ -531,7 +527,7 @@ const isOwner = !!(
               <div
                 key={index}
                 className={`image-card ${loadedImages.has(index) ? 'loaded' : ''}`}
-                style={{ ['--delay']: `${(index % 12) * 60}ms` }}
+                style={{ "--delay": `${(index % 12) * 60}ms` }}
               >
                 <div className="image-container">
                   <img

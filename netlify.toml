@@ -4,6 +4,43 @@
   functions = "netlify/functions"
 
 [[redirects]]
+  # Explicit function mappings for API and auth endpoints
+  from = "/api/images"
+  to = "/.netlify/functions/api-images"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/auth/signup"
+  to = "/.netlify/functions/auth-signup"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/auth/login"
+  to = "/.netlify/functions/auth-login"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/auth/google"
+  to = "/.netlify/functions/auth-google"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/me"
+  to = "/.netlify/functions/me"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/dashboard"
+  to = "/.netlify/functions/dashboard"
+  status = 200
+  force = false
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200 

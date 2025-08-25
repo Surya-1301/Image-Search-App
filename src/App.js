@@ -11,6 +11,15 @@ function App() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [provider, setProvider] = useState('both');
+  // Unsplash controls
+  const [unsplashPerPage, setUnsplashPerPage] = useState(10);
+  const [unsplashOrientation, setUnsplashOrientation] = useState('');
+  const [unsplashColor, setUnsplashColor] = useState('');
+  // Pixabay controls
+  const [pixabayPerPage, setPixabayPerPage] = useState(20);
+  const [pixabayImageType, setPixabayImageType] = useState('photo');
+  const [pixabayOrder, setPixabayOrder] = useState('popular');
+  const [pixabayCategory, setPixabayCategory] = useState('');
   const [loadedImages, setLoadedImages] = useState(new Set());
   const [savingIds, setSavingIds] = useState(new Set());
   const [savedIds, setSavedIds] = useState(new Set());
@@ -23,6 +32,12 @@ function App() {
   const [pendingSave, setPendingSave] = useState(null);
   const [toast, setToast] = useState(null);
   const googleButtonRef = useRef(null);
+  // Pagination / results
+  const [page, setPage] = useState(1);
+  const [totalHits, setTotalHits] = useState(null);
+  // Lightbox / image expand state
+  const [showLightbox, setShowLightbox] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState(null);
 
   // Initialize Google Identity Services button when auth modal opens
   useEffect(() => {
@@ -159,7 +174,6 @@ function App() {
 
   // API base: when deployed to Netlify Functions this should be '/' (relative)
   const apiBase = process.env.REACT_APP_BACKEND_URL || '/';
-
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -182,6 +196,67 @@ function App() {
       }
     } catch (err) {
       alert((err.response && err.response.data && err.response.data.error) || err.message);
+    }
+  };
+
+  // Fetch results for a given page (used for search and pagination)
+  const fetchResults = async (pageToFetch = 1) => {
+    if (!query || !query.trim()) return;
+    try {
+      setLoading(true);
+      setError(null);
+
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || '/';
+      const params = new URLSearchParams();
+      params.set('query', query);
+      params.set('provider', provider);
+      params.set('page', String(pageToFetch));
+  // enforce fixed per-page
+  params.set('per_page', String(perPage));
+
+      // Unsplash params
+      if (provider === 'unsplash' || provider === 'both') {
+        if (unsplashPerPage) params.set('per_page', String(unsplashPerPage));
+        if (unsplashOrientation) params.set('orientation', unsplashOrientation);
+        if (unsplashColor) params.set('color', unsplashColor);
+      }
+
+      // Pixabay params
+      if (provider === 'pixabay' || provider === 'both') {
+        if (pixabayPerPage) params.set('per_page', String(pixabayPerPage));
+        if (pixabayImageType) params.set('image_type', pixabayImageType);
+        if (pixabayOrder) params.set('order', pixabayOrder);
+        if (pixabayCategory) params.set('category', pixabayCategory);
+      }
+
+      const url = `${backendUrl}api/images?${params.toString()}`;
+      let response;
+      try {
+        response = await axios.get(url);
+      } catch (axErr) {
+        // axios error: include status and server body if available
+        const status = axErr.response ? axErr.response.status : 'network';
+        const body = axErr.response && axErr.response.data ? JSON.stringify(axErr.response.data) : (axErr.message || 'no body');
+        const msg = `Request failed: ${status} - ${body}`;
+        console.error(msg, axErr);
+        setError(msg);
+        setImages([]);
+        setLoading(false);
+        return;
+      }
+      const data = response.data || {};
+      setImages(data.hits || []);
+      const t = Number(data.totalHits || data.total || (data.hits && data.hits.length) || 0);
+      setTotalHits(isNaN(t) ? null : t);
+      setPage(pageToFetch);
+      // scroll to top of results
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error('Error details:', error);
+      setError(error.message);
+      setImages([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -255,7 +330,10 @@ function App() {
     try {
       // fetch image as blob to ensure download works across origins
       const res = await fetch(image.webformatURL || image.largeImageURL || image.url);
-      if (!res.ok) throw new Error('Failed to fetch image');
+      if (!res.ok) {
+        const text = await res.text().catch(() => 'no body');
+        throw new Error(`Failed to fetch image: ${res.status} ${res.statusText} - ${text}`);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -278,7 +356,8 @@ function App() {
         return s;
       });
     } catch (err) {
-      console.error('Save/download failed', err);
+  console.error('Save/download failed', err);
+  setToast((err && err.message) ? `Save failed: ${err.message}` : 'Save failed');
     } finally {
       setSavingIds(prev => {
         const s = new Set(prev);
@@ -288,28 +367,45 @@ function App() {
     }
   };
 
+  // Lightbox helpers
+  const getLargeImageUrl = (image) => {
+    if (!image) return '';
+    // common normalized fields used by providers
+    return (
+      image.largeImageURL ||
+      (image.urls && (image.urls.full || image.urls.regular || image.urls.raw)) ||
+      image.full ||
+      image.regular ||
+      image.webformatURL ||
+      ''
+    );
+  };
+
+  const openLightbox = (image) => {
+    setLightboxImage(image);
+    setShowLightbox(true);
+  };
+
+  const closeLightbox = () => {
+    setShowLightbox(false);
+    setLightboxImage(null);
+  };
+
+  // close lightbox on ESC
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeLightbox();
+    };
+    if (showLightbox) window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showLightbox]);
+
   // Function to handle the search when the button is clicked
   const handleSearch = async (e) => {
     e.preventDefault();
     if (!query.trim()) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-      
-    const backendUrl = process.env.REACT_APP_BACKEND_URL || '/';
-  // always request both providers from the API
-  const url = `${backendUrl}api/images?query=${encodeURIComponent(query)}&provider=${encodeURIComponent(provider)}`;
-      
-  const response = await axios.get(url);
-      setImages(response.data.hits || []);
-    } catch (error) {
-      console.error('Error details:', error);
-      setError(error.message);
-      setImages([]);
-    } finally {
-      setLoading(false);
-    }
+  // use unified fetchResults which handles pagination and UI state
+  fetchResults(1);
   };
 
   // small helper to decide owner access
@@ -319,6 +415,9 @@ const isOwner = !!(
   (auth && auth.username && auth.username === ownerEmail) ||
   (localStorage.getItem('email') && localStorage.getItem('email') === ownerEmail)
 );
+
+  // per-page fixed to 30 as requested
+  const perPage = 30;
 
   return (
     <div className="app-container">
@@ -384,6 +483,7 @@ const isOwner = !!(
                 )}
               </button>
             </div>
+            
           </form>
           <div className="auth-controls">
             {auth.token ? (
@@ -425,6 +525,7 @@ const isOwner = !!(
             <p>Searching for images...</p>
           </div>
         ) : images.length > 0 ? (
+          <>
           <div className="image-grid">
             {images.map((image, index) => (
               <div
@@ -438,6 +539,7 @@ const isOwner = !!(
                     alt={image.tags}
                     loading="lazy"
                     onLoad={() => handleImageLoad(index)}
+                    onClick={() => openLightbox(image)}
                   />
 
                   {/* Floating provider badge on image */}
@@ -455,30 +557,51 @@ const isOwner = !!(
                         {savingIds.has(image.webformatURL || image.id) ? 'Saving...' : savedIds.has(image.webformatURL || image.id) ? 'Saved' : 'Save'}
                       </button>
                     </div>
-                    <div className="image-stats">
-                      <span>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                        </svg>
-                        {image.likes}
-                      </span>
-                      <span>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                          <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                        {image.views}
-                      </span>
-                    </div>
+                     <div className="image-stats">
+                        { /* Do not show "likes" for Unsplash or Pixabay providers */ }
+                        {image.likes != null && image.provider !== 'unsplash' && image.provider !== 'pixabay' && (
+                          <span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                            </svg>
+                            {image.likes}
+                          </span>
+                        )}
+                        { /* Do not show "views" for Unsplash or Pixabay providers */ }
+                        {image.views != null && image.provider !== 'unsplash' && image.provider !== 'pixabay' && (
+                          <span>
+                            {image.views}
+                          </span>
+                        )}
+                      </div>
                   </div>
                 </div>
                 <div className="image-info">
-                  <p className="image-tags">{image.tags}</p>
-                  <p className="image-user">by {image.user}</p>
+                  {image.provider !== 'unsplash' && image.provider !== 'pixabay' ? (
+                    <>
+                      <p className="image-tags">{image.tags}</p>
+                      <p className="image-user">by {image.user}</p>
+                    </>
+                  ) : null}
                 </div>
               </div>
             ))}
           </div>
+          {/* Pagination controls */}
+          <div className="pagination" style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
+            <div style={{ color: '#666' }}>
+              {totalHits != null ? (
+                <span>Showing {((page - 1) * perPage) + 1} - {((page - 1) * perPage) + images.length} of {totalHits}</span>
+              ) : (
+                <span>Showing {images.length} results</span>
+              )}
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              <button onClick={() => fetchResults(Math.max(1, page - 1))} disabled={page <= 1} className="pagination-button">Prev</button>
+              <button onClick={() => fetchResults(page + 1)} disabled={images.length < perPage || (totalHits != null && page * perPage >= totalHits)} className="pagination-button">Next</button>
+            </div>
+          </div>
+          </>
         ) : !loading && (
           <div className="no-results">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -594,6 +717,59 @@ const isOwner = !!(
               ) : (
                 <p>No data loaded.</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox modal for expanded image view */}
+      {showLightbox && lightboxImage && (
+        <div
+          className="lightbox-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeLightbox}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+        >
+          <div
+            className="lightbox-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '92%', maxHeight: '92%', background: '#000', padding: 12, borderRadius: 8, boxShadow: '0 8px 30px rgba(0,0,0,0.6)' }}
+          >
+            <button
+              onClick={closeLightbox}
+              aria-label="Close"
+              style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 20, position: 'absolute', right: 18, top: 12, cursor: 'pointer' }}
+            >
+              ×
+            </button>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', color: '#fff' }}>
+              <div style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <img
+                  src={getLargeImageUrl(lightboxImage)}
+                  alt={lightboxImage.tags}
+                  style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 6, objectFit: 'contain' }}
+                />
+              </div>
+              <div style={{ width: 280, maxHeight: '80vh', overflow: 'auto' }}>
+                <div style={{ marginBottom: 8 }}>
+                  <strong style={{ fontSize: 16 }}>{lightboxImage.user || lightboxImage.username || ''}</strong>
+                </div>
+                {lightboxImage.tags && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ color: '#ddd', fontSize: 13 }}>Tags</div>
+                    <div style={{ marginTop: 4 }}>{lightboxImage.tags}</div>
+                  </div>
+                )}
+                <div style={{ marginTop: 12 }}>
+                  <button onClick={(e) => { e.stopPropagation(); handleSave(lightboxImage, e); }} style={{ padding: '8px 12px' }}>Save / Download</button>
+                </div>
+                <div style={{ marginTop: 12, color: '#aaa', fontSize: 12 }}>
+                  <div>Provider: {lightboxImage.provider}</div>
+                  {lightboxImage.likes != null && <div>Likes: {lightboxImage.likes}</div>}
+                  {lightboxImage.views != null && <div>Views: {lightboxImage.views}</div>}
+                </div>
+              </div>
             </div>
           </div>
         </div>

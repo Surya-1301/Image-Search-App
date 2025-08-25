@@ -254,6 +254,7 @@ app.get('/test', (req, res) => {
 app.get('/api/images', async (req, res) => {
   try {
     const { query, page = 1 } = req.query;
+  const per = Number(req.query.per_page) || 30; // Get per_page from query params, default to 30
     // provider can be forced via ?provider=pixabay|unsplash|pinterest
     const providerParam = (req.query.provider || '').toLowerCase();
     // Resolve provider preference: query param overrides env flags
@@ -352,7 +353,7 @@ app.get('/api/images', async (req, res) => {
           key: process.env.PIXABAY_API_KEY,
           q: query,
           image_type: 'photo',
-          per_page: 20,
+          per_page: per, // Use dynamic per_page value
           page
         }
       });

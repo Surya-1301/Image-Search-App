@@ -80,4 +80,54 @@ image-search-app/
 └── README.md           # Project documentation
 ```
 Backend is implemented as Netlify Functions (serverless). For production you'll want a persistent datastore (Supabase, S3, FaunaDB, etc.) because Netlify Function filesystem is ephemeral.
+
+Google Images (Programmable Search) support
+- To enable Google Images provider set the following environment variables on Netlify (or in your local `.env` for dev):
+  - `GOOGLE_API_KEY` - API key for Google Custom Search JSON API
+  - `GOOGLE_CSE_ID` - Custom Search Engine ID (cx) configured for Image search
+
+Use provider `google` or `googleimages` when calling `/api/images`.
+ 
+Unsplash provider enhancements
+- The Unsplash provider now accepts extra query params passed to `/api/images`:
+  - `per_page` (number) — results per page (1..30, defaults to 10)
+  - `orientation` (string) — one of `landscape`, `portrait`, `squarish`
+  - `color` (string) — color filter supported by Unsplash (e.g., `black_and_white`, `black`, `white`, `yellow`, `orange`, `red`, `purple`, `magenta`, `green`, `teal`, `blue`)
+
+Example request:
+
+```
+/api/images?provider=unsplash&query=mountains&per_page=15&orientation=landscape&color=blue
+```
+
+Enhanced Unsplash response shape (each hit contains):
+- `id` — Unsplash image ID
+- `webformatURL`, `smallURL`, `fullURL`, `rawURL` — various image sizes/URLs
+- `tags` — alt text or description
+- `likes`, `views` — numeric stats (when available)
+- `user` — photographer username or name
+- `userProfile` — photographer profile URL (for attribution)
+- `provider` — `unsplash`
+
+Pixabay provider enhancements
+- The Pixabay provider now accepts additional query params:
+  - `per_page` (number) — results per page (1..200, defaults to 20)
+  - `image_type` (string) — e.g., `photo`, `illustration`, `vector`
+  - `safesearch` (true|false) — filter explicit content (defaults to `true`)
+  - `order` (string) — `popular` or `latest` (defaults to `popular`)
+  - `category` (string) — Pixabay category slug (e.g., `nature`, `fashion`)
+
+Example request:
+
+```
+/api/images?provider=pixabay&query=mountains&per_page=24&image_type=photo&order=latest
+```
+
+Enhanced Pixabay response shape (each hit contains):
+- `id` — Pixabay image id
+- `webformatURL`, `largeImageURL`, `pageURL` — image links
+- `tags` (string) and `tagsArray` (array)
+- `likes`, `views` — numeric stats
+- `user`, `userImageURL` — photographer/creator info
+- `provider` — `pixabay`
 5. Open a Pull Request

@@ -1,6 +1,6 @@
 // src/App.js
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { ReactComponent as Logo } from './logo.svg';
 import './App.css'; // Optional: Import the CSS file for styling
@@ -32,6 +32,100 @@ function App() {
   const [pendingSave, setPendingSave] = useState(null);
   const [toast, setToast] = useState(null);
   const googleButtonRef = useRef(null);
+  
+  // API base: when deployed to Netlify Functions this should be '/' (relative)
+  const apiBase = process.env.REACT_APP_BACKEND_URL || '/';
+
+  // Handle Google credential (ID token) returned by Google Identity Services
+  // Save / download image (used by UI and by Google flow resume)
+  const handleSave = useCallback(async (image, e) => {
+    e && e.stopPropagation();
+    // require authentication to save/download images
+    const token = auth.token || localStorage.getItem('token');
+    if (!token) {
+      // store pending image and open auth modal
+      setPendingSave(image);
+      const pref = localStorage.getItem('preferredAuthMode') || 'signup';
+      setAuthMode(pref);
+      setShowAuth(true);
+      return;
+    }
+    const key = image.webformatURL || image.largeImageURL || image.url || image.id || image.tags;
+    if (!key) return;
+    // already saving
+    setSavingIds(prev => {
+      const s = new Set(prev);
+      if (s.has(key)) return prev;
+      s.add(key);
+      return s;
+    });
+
+    try {
+      // fetch image as blob to ensure download works across origins
+      const res = await fetch(image.webformatURL || image.largeImageURL || image.url);
+      if (!res.ok) {
+        const text = await res.text().catch(() => 'no body');
+        throw new Error(`Failed to fetch image: ${res.status} ${res.statusText} - ${text}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeName = (image.user || 'image').replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+      a.download = `${safeName}_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      // persist minimal favorite info
+      const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
+      favs.push({ url: image.webformatURL || image.largeImageURL || image.url, tags: image.tags, user: image.user, provider: image.provider });
+      localStorage.setItem('favorites', JSON.stringify(favs));
+
+      setSavedIds(prev => {
+        const s = new Set(prev);
+        s.add(key);
+        return s;
+      });
+    } catch (err) {
+      console.error('Save/download failed', err);
+      setToast((err && err.message) ? `Save failed: ${err.message}` : 'Save failed');
+    } finally {
+      setSavingIds(prev => {
+        const s = new Set(prev);
+        s.delete(key);
+        return s;
+      });
+    }
+  }, [auth]);
+
+  // Handle Google credential (ID token) returned by Google Identity Services
+  const handleGoogleCredential = useCallback(async (credential) => {
+    try {
+      // send id_token to backend for verification and account creation/login
+      const url = `${apiBase}/auth/google`;
+      const resp = await axios.post(url, { id_token: credential });
+      const { token, username, email } = resp.data;
+      setAuth({ token, username, email });
+      localStorage.setItem('token', token);
+      localStorage.setItem('username', username);
+      if (email) localStorage.setItem('email', email);
+      setShowAuth(false);
+      // resume pending save if any
+      if (pendingSave) {
+        setToast('Saving image after sign-in...');
+        setTimeout(() => {
+          try { handleSave(pendingSave, null); } catch (err) { console.warn('resumed save failed', err); }
+          setPendingSave(null);
+        }, 200);
+        setTimeout(() => setToast(null), 2000);
+      }
+    } catch (err) {
+      console.error('Google sign-in failed', err);
+      alert((err.response && err.response.data && err.response.data.error) || err.message);
+    }
+  }, [apiBase, pendingSave, handleSave]);
   // Pagination / results
   const [page, setPage] = useState(1);
   const [totalHits, setTotalHits] = useState(null);
@@ -76,7 +170,7 @@ function App() {
         console.warn('Google Identity Services init failed', e);
       }
     }
-  }, [showAuth]);
+  }, [showAuth, handleGoogleCredential]);
 
   // update the browser tab title based on the query and provider
   useEffect(() => {
@@ -173,8 +267,6 @@ function App() {
     return () => { mounted = false; };
   }, [apiBase]);
 
-  // API base: when deployed to Netlify Functions this should be '/' (relative)
-  const apiBase = process.env.REACT_APP_BACKEND_URL || '/';
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -261,32 +353,7 @@ function App() {
     }
   };
 
-  // Handle Google credential (ID token) returned by Google Identity Services
-  const handleGoogleCredential = async (credential) => {
-    try {
-      // send id_token to backend for verification and account creation/login
-      const url = `${apiBase}/auth/google`;
-      const resp = await axios.post(url, { id_token: credential });
-  const { token, username, email } = resp.data;
-  setAuth({ token, username, email });
-  localStorage.setItem('token', token);
-  localStorage.setItem('username', username);
-  if (email) localStorage.setItem('email', email);
-      setShowAuth(false);
-      // resume pending save if any
-      if (pendingSave) {
-        setToast('Saving image after sign-in...');
-        setTimeout(() => {
-          try { handleSave(pendingSave, null); } catch (err) { console.warn('resumed save failed', err); }
-          setPendingSave(null);
-        }, 200);
-        setTimeout(() => setToast(null), 2000);
-      }
-    } catch (err) {
-      console.error('Google sign-in failed', err);
-      alert((err.response && err.response.data && err.response.data.error) || err.message);
-    }
-  };
+  
 
   const handleLogout = () => {
     setAuth({ token: null, username: null });
@@ -306,67 +373,7 @@ function App() {
     }
   };
 
-  const handleSave = async (image, e) => {
-    e && e.stopPropagation();
-    // require authentication to save/download images
-    const token = auth.token || localStorage.getItem('token');
-    if (!token) {
-      // store pending image and open auth modal
-      setPendingSave(image);
-  const pref = localStorage.getItem('preferredAuthMode') || 'signup';
-  setAuthMode(pref);
-  setShowAuth(true);
-      return;
-    }
-    const key = image.webformatURL || image.largeImageURL || image.url || image.id || image.tags;
-    if (!key) return;
-    // already saving
-    setSavingIds(prev => {
-      const s = new Set(prev);
-      if (s.has(key)) return prev;
-      s.add(key);
-      return s;
-    });
-
-    try {
-      // fetch image as blob to ensure download works across origins
-      const res = await fetch(image.webformatURL || image.largeImageURL || image.url);
-      if (!res.ok) {
-        const text = await res.text().catch(() => 'no body');
-        throw new Error(`Failed to fetch image: ${res.status} ${res.statusText} - ${text}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const safeName = (image.user || 'image').replace(/[^a-z0-9_\-]/gi, '_').toLowerCase();
-      a.download = `${safeName}_${Date.now()}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-
-      // persist minimal favorite info
-      const favs = JSON.parse(localStorage.getItem('favorites') || '[]');
-      favs.push({ url: image.webformatURL || image.largeImageURL || image.url, tags: image.tags, user: image.user, provider: image.provider });
-      localStorage.setItem('favorites', JSON.stringify(favs));
-
-      setSavedIds(prev => {
-        const s = new Set(prev);
-        s.add(key);
-        return s;
-      });
-    } catch (err) {
-  console.error('Save/download failed', err);
-  setToast((err && err.message) ? `Save failed: ${err.message}` : 'Save failed');
-    } finally {
-      setSavingIds(prev => {
-        const s = new Set(prev);
-        s.delete(key);
-        return s;
-      });
-    }
-  };
+  
 
   // Lightbox helpers
   const getLargeImageUrl = (image) => {
@@ -410,7 +417,6 @@ function App() {
   };
 
   // small helper to decide owner access
-const ownerEmail = process.env.REACT_APP_OWNER_EMAIL || '';
 
   // per-page fixed to 30 as requested
   const perPage = 30;

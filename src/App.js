@@ -633,9 +633,6 @@ function App() {
             </form>
             <div style={{ marginTop: 12 }}>
               <div ref={googleButtonRef} id="google-signin-button"></div>
-              <div style={{ marginTop: 8 }}>
-                <button onClick={() => alert('Alternatively, use the Google button above to sign in')}>Sign in with Google</button>
-              </div>
             </div>
           </div>
         </div>
